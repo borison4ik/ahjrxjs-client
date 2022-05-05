@@ -1,5 +1,5 @@
 import { ajax } from 'rxjs/ajax';
-import { map, catchError, of, switchMap, interval } from 'rxjs';
+import { EMPTY, map, catchError, of, switchMap, interval, tap } from 'rxjs';
 
 import Message from './components/message';
 import formatTime from './utils/formatTime';
@@ -10,51 +10,42 @@ import '../css/style.scss';
 
 window.onload = () => {
   const listGroup = document.getElementById('list-group');
-
-  // const intervalStream$ = ajax('http://localhost:7070/messages/unread').pipe(
-  //   map((response) => {
-  //     console.log('response: ', response.response);
-  //     const { messages, status, timestamp } = response.response;
-  //     if (status === 'ok') {
-  //       const newMessage = new Message({
-  //         id: '1',
-  //         from: 'mail@mail.ru',
-  //         subject: 'Тема письма',
-  //         body: 'lorem ipsum dolor sit am',
-  //         received: '18:40 03.20.2018',
-  //       });
-  //       listGroup.insertAdjacentHTML('afterbegin', newMessage.render());
-  //     }
-  //   }),
-  //   catchError((error) => {
-  //     console.log('error: ', error);
-  //     return of(error);
-  //   })
-  // );
+  listGroup.addEventListener('click', (evt) => {
+    const parent = evt.target.closest('.list-group-item');
+    if (parent.classList.contains('active')) parent.classList.remove('active');
+  });
 
   const intervalStream$ = interval(5000).pipe(
-    switchMap((v) => ajax('http://localhost:7070/messages/unread')),
-    map((response) => response.response.messages),
-    catchError((error) => {
-      console.log('error: ', error);
-      return of(error);
+    tap((v) => console.log(v)),
+    switchMap((v) => {
+      return ajax.getJSON('http://localhost:7070/messages/unread').pipe(
+        catchError((error) => {
+          console.log('error: ', error.message);
+          return EMPTY;
+        })
+      );
+    }),
+    map((response) => {
+      console.log(response);
+      return response.messages;
     })
   );
 
   intervalStream$.subscribe({
     next: (messages) => addMessages(messages),
-    error: (err) => console.log(err),
+    error: (err) => console.log('err', err),
   });
 
   function addMessages(messages) {
-    listGroup.innerHTML = '';
-    messages.forEach((message) => {
-      const newMessage = new Message({
-        ...message,
-        received: formatTime(message.received),
-        subject: formatSubject(message.subject),
+    if (Array.isArray(messages) && messages.length > 0) {
+      messages.forEach((message) => {
+        const newMessage = new Message({
+          ...message,
+          received: formatTime(message.received),
+          subject: formatSubject(message.subject),
+        });
+        listGroup.insertAdjacentHTML('afterbegin', newMessage.render());
       });
-      listGroup.insertAdjacentHTML('afterbegin', newMessage.render());
-    });
+    }
   }
 };
